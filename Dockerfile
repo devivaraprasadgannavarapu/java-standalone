@@ -1,4 +1,7 @@
 FROM eclipse-temurin:21
+
 WORKDIR /app
-COPY target/java-sample-21-1.0.0.jar .
-CMD ["java", "-jar", "java-sample-21-1.0.0.jar"]
+
+COPY target/demo-0.0.1-SNAPSHOT.jar app.jar
+
+CMD ["java", "-jar", "app.jar"]
