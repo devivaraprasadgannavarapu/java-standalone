@@ -2,10 +2,15 @@ pipeline {
 
     agent any
 
-      environment {
+    tools {
+        jdk 'jdk17'
+        maven 'maven3'
+    }
+
+    environment {
         IMAGE_NAME = "261142222215.dkr.ecr.eu-north-1.amazonaws.com/java-standalone"
         AWS_REGION = "eu-north-1"
-       }
+    }
 
     stages {
 
@@ -53,7 +58,5 @@ pipeline {
                 '''
             }
         }
-
     }
-
 }
