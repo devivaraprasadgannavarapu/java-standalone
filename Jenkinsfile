@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    tools {
+    maven 'maven'
+    jdk 'jdk17'
+        }
+    
     environment {
         IMAGE_NAME = "dvpking007/jenkins-demo-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
