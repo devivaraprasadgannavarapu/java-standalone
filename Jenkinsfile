@@ -1,60 +1,102 @@
 pipeline {
-
     agent any
 
-    tools {
-        jdk 'jdk17'
-        maven 'maven3'
-    }
-
     environment {
-        IMAGE_NAME = "261142222215.dkr.ecr.eu-north-1.amazonaws.com/java-standalone"
-        AWS_REGION = "eu-north-1"
+        IMAGE_NAME = "dvpking007/jenkins-demo-app"
+        IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Git Checkout') {
             steps {
                 git 'https://github.com/devivaraprasadgannavarapu/java-standalone.git'
             }
         }
 
-        stage('Build') {
+        stage('SonarQube Analysis') {
             steps {
-                sh 'mvn clean package'
+                withSonarQubeEnv('sonarqube') {
+                    sh '''
+                    sonar-scanner \
+                    -Dsonar.projectKey=demo-app \
+                    -Dsonar.sources=. \
+                    -Dsonar.host.url=http://localhost:9000 \
+                    -Dsonar.login=YOUR_SONAR_TOKEN
+                    '''
+                }
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t java-app .'
+                sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
             }
         }
 
-        stage('Push to Amazon ECR') {
+        stage('Docker Push') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+
+                    sh '''
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    docker push $IMAGE_NAME:$IMAGE_TAG
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy Dev') {
             steps {
                 sh '''
-                aws ecr get-login-password --region $AWS_REGION | \
-                docker login --username AWS --password-stdin 261142222215.dkr.ecr.eu-north-1.amazonaws.com
+                docker rm -f dev-container || true
 
-                docker tag java-app:latest $IMAGE_NAME:latest
-
-                docker push $IMAGE_NAME:latest
+                docker run -d \
+                --name dev-container \
+                -p 3001:3000 \
+                $IMAGE_NAME:$IMAGE_TAG
                 '''
             }
         }
 
-        stage('Deploy Docker Container') {
+        stage('Approval For Stage') {
+            steps {
+                input message: "Deploy to STAGE?"
+            }
+        }
+
+        stage('Deploy Stage') {
             steps {
                 sh '''
-                docker stop java-container || true
-                docker rm java-container || true
+                docker rm -f stage-container || true
 
                 docker run -d \
-                --name java-container \
-                -p 8081:8080 \
-                $IMAGE_NAME:latest
+                --name stage-container \
+                -p 3002:3000 \
+                $IMAGE_NAME:$IMAGE_TAG
+                '''
+            }
+        }
+
+        stage('Approval For Prod') {
+            steps {
+                input message: "Deploy to PROD?"
+            }
+        }
+
+        stage('Deploy Prod') {
+            steps {
+                sh '''
+                docker rm -f prod-container || true
+
+                docker run -d \
+                --name prod-container \
+                -p 3003:3000 \
+                $IMAGE_NAME:$IMAGE_TAG
                 '''
             }
         }
