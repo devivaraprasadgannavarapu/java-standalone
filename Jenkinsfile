@@ -14,15 +14,26 @@ pipeline {
             }
         }
 
+        stage('Maven Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonarqube') {
+
+                withCredentials([string(
+                    credentialsId: 'sonar-token',
+                    variable: 'SONAR_TOKEN'
+                )]) {
+
                     sh '''
                     sonar-scanner \
                     -Dsonar.projectKey=demo-app \
                     -Dsonar.sources=. \
                     -Dsonar.host.url=http://localhost:9000 \
-                    -Dsonar.login=YOUR_SONAR_TOKEN
+                    -Dsonar.login=$SONAR_TOKEN
                     '''
                 }
             }
@@ -36,6 +47,7 @@ pipeline {
 
         stage('Docker Push') {
             steps {
+
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-creds',
                     usernameVariable: 'DOCKER_USER',
@@ -44,6 +56,7 @@ pipeline {
 
                     sh '''
                     echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+
                     docker push $IMAGE_NAME:$IMAGE_TAG
                     '''
                 }
@@ -57,7 +70,7 @@ pipeline {
 
                 docker run -d \
                 --name dev-container \
-                -p 3001:3000 \
+                -p 3001:8080 \
                 $IMAGE_NAME:$IMAGE_TAG
                 '''
             }
@@ -76,7 +89,7 @@ pipeline {
 
                 docker run -d \
                 --name stage-container \
-                -p 3002:3000 \
+                -p 3002:8080 \
                 $IMAGE_NAME:$IMAGE_TAG
                 '''
             }
@@ -95,7 +108,7 @@ pipeline {
 
                 docker run -d \
                 --name prod-container \
-                -p 3003:3000 \
+                -p 3003:8080 \
                 $IMAGE_NAME:$IMAGE_TAG
                 '''
             }
