@@ -5,6 +5,7 @@ pipeline {
     environment {
         AWS_REGION = "eu-north-1"
         ECR_REGISTRY = "540553462149.dkr.ecr.eu-north-1.amazonaws.com"
+        ECR_REPOSITORY = "my-app"
         IMAGE_NAME = "540553462149.dkr.ecr.eu-north-1.amazonaws.com/my-app"
         CONTAINER_NAME = "java-container"
     }
@@ -13,7 +14,16 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git 'https://github.com/devivaraprasadgannavarapu/java-standalone.git'
+                git branch: 'master',
+                    url: 'https://github.com/devivaraprasadgannavarapu/java-standalone.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh '''
+                    mvn clean package
+                '''
             }
         }
 
@@ -54,6 +64,16 @@ pipeline {
                         $IMAGE_NAME:latest
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo 'CI/CD Pipeline completed successfully!'
+        }
+
+        failure {
+            echo 'CI/CD Pipeline failed. Check the console output.'
         }
     }
 }
