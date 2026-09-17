@@ -7,12 +7,17 @@ pipeline {
         // ==============================
         // AWS / ECR CONFIGURATION
         // ==============================
-        AWS_REGION     = 'ap-south-1'
-        ECR_REPOSITORY = 'java-standalone'
 
-        // Docker/application configuration
+        AWS_REGION     = 'eu-north-1'
+        ECR_REPOSITORY = 'java-app'
+
+        // ==============================
+        // Docker / Application
+        // ==============================
+
         IMAGE_NAME     = 'java-standalone'
         CONTAINER_NAME = 'java-standalone'
+
         CONTAINER_PORT = '8081'
         APP_PORT       = '8080'
     }
@@ -21,7 +26,9 @@ pipeline {
 
         // =========================================================
         // STAGE 1: CHECKOUT
+        // AGENT 1
         // =========================================================
+
         stage('Checkout') {
 
             agent {
@@ -54,7 +61,9 @@ pipeline {
 
         // =========================================================
         // STAGE 2: TEST + SONARQUBE
+        // AGENT 1
         // =========================================================
+
         stage('Test') {
 
             agent {
@@ -100,6 +109,9 @@ pipeline {
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=java-standalone \
                                 -Dsonar.token="$SONAR_TOKEN"
+
+                            echo ""
+                            echo "SonarQube analysis completed."
                         '''
                     }
                 }
@@ -109,7 +121,9 @@ pipeline {
 
         // =========================================================
         // STAGE 3: BUILD JAR + DOCKER IMAGE
+        // AGENT 2
         // =========================================================
+
         stage('Build') {
 
             agent {
@@ -122,7 +136,7 @@ pipeline {
                 echo 'BUILD STAGE'
                 echo '=========================================='
 
-                // Agent-2 has its own workspace,
+                // Agent 2 has a separate workspace,
                 // therefore checkout source code again.
                 checkout scm
 
@@ -168,7 +182,9 @@ pipeline {
 
         // =========================================================
         // STAGE 4: TRIVY SCAN
+        // AGENT 2
         // =========================================================
+
         stage('Scan') {
 
             agent {
@@ -200,6 +216,9 @@ pipeline {
                         --severity HIGH,CRITICAL \
                         --exit-code 1 \
                         "$IMAGE_NAME:$BUILD_NUMBER"
+
+                    echo ""
+                    echo "Trivy scan completed successfully."
                 '''
             }
         }
@@ -207,7 +226,9 @@ pipeline {
 
         // =========================================================
         // STAGE 5: PUSH TO AMAZON ECR
+        // AGENT 2
         // =========================================================
+
         stage('Push to ECR') {
 
             agent {
@@ -230,6 +251,10 @@ pipeline {
                     sh '''
                         echo "Running on:"
                         hostname
+
+                        echo ""
+                        echo "AWS CLI version:"
+                        aws --version
 
                         echo ""
                         echo "AWS Identity:"
@@ -268,6 +293,9 @@ pipeline {
                             --password-stdin "$ECR_REGISTRY"
 
                         echo ""
+                        echo "ECR login successful."
+
+                        echo ""
                         echo "Tagging Docker image..."
 
                         docker tag \
@@ -275,12 +303,18 @@ pipeline {
                             "$ECR_IMAGE"
 
                         echo ""
-                        echo "Pushing Docker image..."
+                        echo "Docker images:"
+                        docker images | grep "$IMAGE_NAME"
+
+                        echo ""
+                        echo "Pushing Docker image to ECR..."
 
                         docker push "$ECR_IMAGE"
 
                         echo ""
-                        echo "Image successfully pushed to ECR."
+                        echo "=========================================="
+                        echo "IMAGE SUCCESSFULLY PUSHED TO ECR"
+                        echo "=========================================="
 
                         echo ""
                         echo "ECR Image:"
@@ -293,7 +327,9 @@ pipeline {
 
         // =========================================================
         // STAGE 6: DEPLOY ON AGENT-3
+        // AGENT 3
         // =========================================================
+
         stage('Deploy') {
 
             agent {
@@ -318,12 +354,16 @@ pipeline {
                         hostname
 
                         echo ""
-                        echo "AWS Identity:"
-                        aws sts get-caller-identity
+                        echo "AWS CLI version:"
+                        aws --version
 
                         echo ""
                         echo "Docker version:"
                         docker --version
+
+                        echo ""
+                        echo "AWS Identity:"
+                        aws sts get-caller-identity
 
                         echo ""
                         echo "Getting AWS Account ID..."
@@ -350,6 +390,9 @@ pipeline {
                             --password-stdin "$ECR_REGISTRY"
 
                         echo ""
+                        echo "ECR login successful."
+
+                        echo ""
                         echo "Pulling image from ECR..."
 
                         docker pull "$ECR_IMAGE"
@@ -374,10 +417,13 @@ pipeline {
 
                         echo ""
                         echo "Running containers:"
+
                         docker ps
 
                         echo ""
-                        echo "Deployment completed successfully."
+                        echo "=========================================="
+                        echo "DEPLOYMENT COMPLETED SUCCESSFULLY"
+                        echo "=========================================="
                     '''
                 }
             }
@@ -388,6 +434,7 @@ pipeline {
     // =============================================================
     // POST ACTIONS
     // =============================================================
+
     post {
 
         success {
@@ -396,12 +443,14 @@ pipeline {
             ==========================================
             PIPELINE SUCCESS
             ==========================================
+
             Checkout       : Agent-1
             Test/SonarQube : Agent-1
             Build          : Agent-2
             Trivy Scan     : Agent-2
             ECR Push       : Agent-2
             Deploy         : Agent-3
+
             ==========================================
             '''
         }
@@ -412,7 +461,9 @@ pipeline {
             ==========================================
             PIPELINE FAILED
             ==========================================
+
             Check the console output for the failed stage.
+
             ==========================================
             '''
         }
